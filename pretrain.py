@@ -343,6 +343,7 @@ def evaluate(config: PretrainConfig, train_state: TrainState, eval_loader: torch
 
                         # Feature order
                         feature_cols = [
+                            "semantic_location",
                             "cluster",
                             "hour",
                             "day_of_week",
@@ -354,7 +355,7 @@ def evaluate(config: PretrainConfig, train_state: TrainState, eval_loader: torch
                         F = len(feature_cols)
                         K = eval_metadata.seq_len // F
 
-                        target_features = ["user", "cluster"]
+                        target_features = ["user", "semantic_location"]
                         indices = []
 
                         for f in target_features:

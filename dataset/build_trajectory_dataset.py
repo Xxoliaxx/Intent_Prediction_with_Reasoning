@@ -48,6 +48,7 @@ def preprocess_dataframe(df: pd.DataFrame, config: DataProcessConfig):
 
     # ---- 2) Select features we'll feed into HRM ----
     feature_cols = [
+        "semantic_location",
         "cluster",
         "hour",
         "day_of_week",

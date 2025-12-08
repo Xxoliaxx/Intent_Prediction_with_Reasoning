@@ -84,6 +84,7 @@ def launch():
         preds = logits.argmax(-1)
 
         feature_cols = [
+            "semantic_location",
             "cluster",
             "hour",
             "day_of_week",
@@ -95,7 +96,7 @@ def launch():
         F = len(feature_cols)
         K = eval_metadata.seq_len // F
 
-        target_features = ["cluster"]
+        target_features = ["semantic_location"]
         indices = []
 
         for f in target_features:

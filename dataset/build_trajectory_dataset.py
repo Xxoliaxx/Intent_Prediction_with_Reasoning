@@ -32,18 +32,18 @@ def preprocess_dataframe(df: pd.DataFrame, config: DataProcessConfig):
 
     # ---- 1) Parse lat/lon from "location" string ----
     # Example: "(17.4684131, 78.5714633)"
-    loc = df["location"].astype(str).str.strip("()")
-    lat = loc.str.split(",", expand=True)[0].astype(float)
-    lon = loc.str.split(",", expand=True)[1].astype(float)
+    # loc = df["location"].astype(str).str.strip("()")
+    # lat = loc.str.split(",", expand=True)[0].astype(float)
+    # lon = loc.str.split(",", expand=True)[1].astype(float)
 
     # # Bucket lat/lon to keep vocab size reasonable
     # df["lat_bucket"] = lat.round(4).astype(str)
     # df["lon_bucket"] = lon.round(4).astype(str)
 
     # 1b) Compute geohash (MAIN CHANGE) ----
-    df["geohash"] = [
-        geohash.encode(lat_i, lon_i, precision=7)
-        for lat_i, lon_i in zip(lat, lon)
+    # df["geohash"] = [
+    #     geohash.encode(lat_i, lon_i, precision=7)
+    #     for lat_i, lon_i in zip(lat, lon)
     ]
 
     # ---- 2) Select features we'll feed into HRM ----

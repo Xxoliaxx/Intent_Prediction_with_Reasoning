@@ -85,7 +85,6 @@ def launch():
 
         feature_cols = [
             "semantic_location",
-            "cluster",
             "hour",
             "day_of_week",
             "is_weekend",

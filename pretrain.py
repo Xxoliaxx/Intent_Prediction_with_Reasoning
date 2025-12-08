@@ -344,7 +344,6 @@ def evaluate(config: PretrainConfig, train_state: TrainState, eval_loader: torch
                         # Feature order
                         feature_cols = [
                             "semantic_location",
-                            "cluster",
                             "hour",
                             "day_of_week",
                             "is_weekend",

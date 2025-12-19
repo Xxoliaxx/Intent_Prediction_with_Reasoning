@@ -25,3 +25,4 @@ models/__pycache__/losses.cpython-312.pyc
 models/__pycache__/sparse_embedding.cpython-312.pyc
 models/hrm/__pycache__/hrm_act_v1.cpython-312.pyc
 utils/__pycache__/functions.cpython-312.pyc
+arc_eval.ipynb

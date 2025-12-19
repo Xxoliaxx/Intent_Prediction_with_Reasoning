@@ -95,7 +95,7 @@ def launch():
         F = len(feature_cols)
         K = eval_metadata.seq_len // F
 
-        target_features = ["semantic_location"]
+        target_features = ["user","semantic_location"]
         indices = []
 
         for f in target_features:

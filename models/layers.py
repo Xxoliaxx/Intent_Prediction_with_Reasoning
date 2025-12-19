@@ -3,12 +3,13 @@ from typing import Tuple
 import torch
 from torch import nn
 import torch.nn.functional as F
+import math
 
-try:
-    from flash_attn_interface import flash_attn_func  # type: ignore[import]
-except ImportError:
-    # Fallback to FlashAttention 2
-    from flash_attn import flash_attn_func  # type: ignore[import]
+# try:
+#     from flash_attn_interface import flash_attn_func  # type: ignore[import]
+# except ImportError:
+#     # Fallback to FlashAttention 2
+#     from flash_attn import flash_attn_func  # type: ignore[import]
 
 from models.common import trunc_normal_init_
 
@@ -127,9 +128,24 @@ class Attention(nn.Module):
             query, key = apply_rotary_pos_emb(query, key, cos, sin)
 
         # flash attn
-        attn_output = flash_attn_func(q=query, k=key, v=value, causal=self.causal)
-        if isinstance(attn_output, tuple):  # fa2 and fa3 compatibility
-            attn_output = attn_output[0]
+        # attn_output = flash_attn_func(q=query, k=key, v=value, causal=self.causal)
+        # if isinstance(attn_output, tuple):  # fa2 and fa3 compatibility
+        #     attn_output = attn_output[0]
+
+        # standard scaled dot-product attention (no FlashAttention)
+        q = query.transpose(1, 2)   # [bs, heads, seq, head_dim]
+        k = key.transpose(1, 2)
+        v = value.transpose(1, 2)
+
+        attn_output = F.scaled_dot_product_attention(
+            q, k, v,
+            attn_mask=None,
+            dropout_p=0.0,
+            is_causal=self.causal,
+        )
+
+        attn_output = attn_output.transpose(1, 2)  # [bs, seq, heads, head_dim]
+
 
         attn_output = attn_output.view(batch_size, seq_len, self.output_size)  # type: ignore
         return self.o_proj(attn_output)

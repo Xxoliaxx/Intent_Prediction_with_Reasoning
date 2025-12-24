@@ -336,12 +336,11 @@ def evaluate(config: PretrainConfig, train_state: TrainState, eval_loader: torch
                     count = metrics.pop("count")
                     reduced_metrics[set_name] = {k: v / count for k, v in metrics.items()}
 
-                # CUSTOM ACCURACY: user + geohash ONLY
+                # CUSTOM ACCURACY: user + semantic_location ONLY
                 # -----------------------------------------------------
                 try:
                     import numpy as np
                     
-                    # you saved predictions in config.eval_save_outputs
                     # loaded earlier as all_preds in evaluate()
                     pred_tensor = all_preds.get("all__inputs")
                     label_tensor = all_preds.get("all__labels")
@@ -385,8 +384,6 @@ def evaluate(config: PretrainConfig, train_state: TrainState, eval_loader: torch
 
                 except Exception as e:
                     print("Custom accuracy failed:", e)
-
-                # -----------------------------------------------------
 
                 return reduced_metrics
 

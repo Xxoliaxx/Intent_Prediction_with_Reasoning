@@ -351,12 +351,13 @@ def evaluate(config: PretrainConfig, train_state: TrainState, eval_loader: torch
                         labels_cpu = label_tensor.cpu().numpy()
 
                         # Feature order
+                        # ---- Feature selection ----
                         feature_cols = [
                             "semantic_location",
                             "hour",
-                            "day_of_week",
                             "is_weekend",
-                            "wifi_status",
+                            "charging_status",
+                            "bluetooth_status",
                             "user",
                         ]
 
@@ -510,4 +511,12 @@ def launch(hydra_config: DictConfig):
 
 
 if __name__ == "__main__":
-    launch()
+    try:
+        launch()
+    finally:
+        import os, sys
+        if sys.platform == "win32":
+            import winsound
+            winsound.Beep(1000, 700)
+        else:
+            os.system('printf "\a"')

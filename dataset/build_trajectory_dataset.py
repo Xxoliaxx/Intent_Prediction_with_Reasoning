@@ -16,7 +16,7 @@ class DataProcessConfig(BaseModel):
     input_csv: str = "dataset/refined_data.csv"
     output_dir: str = "data/user-trajectory-hrm"
     window_size: int = 5
-    train_frac: float = 0.8
+    train_frac: float = 0.7
     seed: int = 42
 
 def preprocess_dataframe(df: pd.DataFrame, config: DataProcessConfig):
@@ -26,9 +26,9 @@ def preprocess_dataframe(df: pd.DataFrame, config: DataProcessConfig):
     feature_cols = [
         "semantic_location",
         "hour",
-        "day_of_week",
         "is_weekend",
-        "wifi_status",
+        "charging_status",
+        "bluetooth_status",
         "user",
     ]
 
@@ -76,11 +76,8 @@ def build_split(
     config: DataProcessConfig,
     user_id_map: Dict[str, int],
 ):
-    """
-    Build HRM tensors for one split.
-    - Group by user
-    - Sliding window per user
-    """
+
+    # Build HRM tensors for one split.
     K = config.window_size
 
     results = {

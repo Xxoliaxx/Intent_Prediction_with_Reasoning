@@ -83,12 +83,13 @@ def launch():
 
         preds = logits.argmax(-1)
 
+        # ---- Feature selection ----
         feature_cols = [
             "semantic_location",
             "hour",
-            "day_of_week",
             "is_weekend",
-            "wifi_status",
+            "charging_status",
+            "bluetooth_status",
             "user",
         ]
 

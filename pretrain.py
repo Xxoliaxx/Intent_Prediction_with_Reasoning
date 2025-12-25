@@ -508,12 +508,4 @@ def launch(hydra_config: DictConfig):
 
 
 if __name__ == "__main__":
-    try:
-        launch()
-    finally:
-        import os, sys
-        if sys.platform == "win32":
-            import winsound
-            winsound.Beep(1000, 700)
-        else:
-            os.system('printf "\a"')
+    launch()

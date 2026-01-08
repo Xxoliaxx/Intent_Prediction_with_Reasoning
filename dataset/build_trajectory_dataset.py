@@ -1,6 +1,7 @@
 from typing import Dict, List
 import os
 import json
+from dateutil import parser
 
 import numpy as np
 import pandas as pd
@@ -24,6 +25,7 @@ def preprocess_dataframe(df: pd.DataFrame, config: DataProcessConfig):
 
     # ---- Feature selection ----
     feature_cols = [
+        "Intent",
         "semantic_location",
         "hour",
         "is_weekend",
@@ -158,16 +160,34 @@ def build_split(
     np.save(os.path.join(save_dir, "all__puzzle_indices.npy"), puzzle_indices)
     np.save(os.path.join(save_dir, "all__puzzle_identifiers.npy"), puzzle_identifiers)
 
+def parse_mixed_datetime(x):
+    if pd.isna(x) or x == "":
+        return None
+    try:
+        return parser.parse(str(x))
+    except Exception:
+        return None
+
+
 def convert_dataset(config: DataProcessConfig):
     np.random.seed(config.seed)
 
     df = pd.read_csv(config.input_csv)
-    df["datetime"] = pd.to_datetime(
-        df["datetime"],
-        format="mixed",
-        errors="raise",
-    )
-    df["date"] = df["datetime"].dt.date
+    # df["datetime"] = pd.to_datetime(
+    #     df["datetime"],
+    #     format="mixed",
+    #     errors="raise",
+    # )
+
+    df["datetime"] = df["datetime"].apply(parse_mixed_datetime)
+
+    if df["datetime"].isna().any():
+        raise ValueError(
+            f"Found {df['datetime'].isna().sum()} rows with invalid datetime values"
+        )
+
+    # derive date WITHOUT .dt
+    df["date"] = df["datetime"].apply(lambda x: x.date())
 
     # ---- DAY-BASED SPLIT PER USER ----
     train_parts = []

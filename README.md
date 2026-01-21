@@ -20,7 +20,7 @@ python dataset/build_trajectory_dataset.py --input-csv dataset/refined_data.csv 
 
 ## Training
 ```
-OMP_NUM_THREADS=8 python pretrain.py data_path=data/user-trajectory-hrm epochs=100000 eval_interval=2000 global_batch_size=384  lr=7e-5 puzzle_emb_lr=7e-5 weight_decay=1.0 puzzle_emb_weight_decay=1.0
+OMP_NUM_THREADS=8 python pretrain.py data_path=data/user-trajectory-hrm epochs=2000 eval_interval=100 global_batch_size=384  lr=7e-5 puzzle_emb_lr=7e-5 weight_decay=1.0 puzzle_emb_weight_decay=1.0
 ```
 
 ## Evaluation

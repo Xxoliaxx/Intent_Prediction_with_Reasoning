@@ -2,7 +2,6 @@ from typing import Dict, List
 import os
 import json
 from dateutil import parser
-
 import numpy as np
 import pandas as pd
 from argdantic import ArgParser
@@ -23,7 +22,7 @@ class DataProcessConfig(BaseModel):
 def preprocess_dataframe(df: pd.DataFrame, config: DataProcessConfig):
     df = df.copy()
 
-    # ---- Feature selection ----
+    # Feature selection
     feature_cols = [
         "Intent",
         "semantic_location",
@@ -38,7 +37,7 @@ def preprocess_dataframe(df: pd.DataFrame, config: DataProcessConfig):
     df = df.dropna(subset=feature_cols + ["timestamp_long"])
     df = df.sort_values("timestamp_long").reset_index(drop=True)
 
-    # ---- Encode features ----
+    # Encode features
     encoders: Dict[str, LabelEncoder] = {}
     cardinalities: Dict[str, int] = {}
     encoded: Dict[str, np.ndarray] = {}
@@ -51,7 +50,7 @@ def preprocess_dataframe(df: pd.DataFrame, config: DataProcessConfig):
         cardinalities[col] = enc.classes_.shape[0]
         encoded[col] = enc_vals
 
-    # ---- Assign vocab offsets ----
+    # Assign vocab offsets
     offsets: Dict[str, int] = {}
     offset = 1  # 0 reserved for PAD
     for col in feature_cols:
@@ -59,7 +58,7 @@ def preprocess_dataframe(df: pd.DataFrame, config: DataProcessConfig):
         offset += cardinalities[col]
     vocab_size = offset
 
-    # ---- Build token matrix ----
+    # Build token matrix
     num_rows = df.shape[0]
     num_features = len(feature_cols)
     tokens = np.empty((num_rows, num_features), dtype=np.int32)
@@ -132,7 +131,7 @@ def build_split(
     group_indices = np.array(results["group_indices"], dtype=np.int32)
     puzzle_identifiers = np.array(results["puzzle_identifiers"], dtype=np.int32)
 
-    # ---- Sanity checks ----
+    # Sanity checks
     assert inputs.min() >= 0
     assert inputs.max() < vocab_size
 
@@ -173,12 +172,6 @@ def convert_dataset(config: DataProcessConfig):
     np.random.seed(config.seed)
 
     df = pd.read_csv(config.input_csv)
-    # df["datetime"] = pd.to_datetime(
-    #     df["datetime"],
-    #     format="mixed",
-    #     errors="raise",
-    # )
-
     df["datetime"] = df["datetime"].apply(parse_mixed_datetime)
 
     if df["datetime"].isna().any():
@@ -189,7 +182,7 @@ def convert_dataset(config: DataProcessConfig):
     # derive date WITHOUT .dt
     df["date"] = df["datetime"].apply(lambda x: x.date())
 
-    # ---- DAY-BASED SPLIT PER USER ----
+    # Day-Based split per User
     train_parts = []
     test_parts = []
 
@@ -208,12 +201,12 @@ def convert_dataset(config: DataProcessConfig):
     df_train = pd.concat(train_parts).reset_index(drop=True)
     df_test = pd.concat(test_parts).reset_index(drop=True)
 
-    # ---- Hard leakage check ----
+    # Hard leakage check
     assert (
         df_train.merge(df_test, on=["user", "date"], how="inner").empty
     ), "Day leakage detected between train and test"
 
-    # ---- Preprocess independently ----
+    # Preprocess independently 
     df_train, tokens_train, feature_cols, vocab_size_train, _, _ = preprocess_dataframe(df_train, config)
     df_test, tokens_test, _, vocab_size_test, _, _ = preprocess_dataframe(df_test, config)
 

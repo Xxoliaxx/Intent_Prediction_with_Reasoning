@@ -4,12 +4,10 @@ import os
 import math
 import yaml
 import shutil
-
 import torch
 import torch.distributed as dist
 from torch import nn
 from torch.utils.data import DataLoader
-
 import tqdm
 import wandb
 import coolname
@@ -27,7 +25,6 @@ except ImportError:
     Optim = AdamW
     print("AdamATan2 backend missing — falling back to AdamW")
 
-
 from puzzle_dataset import PuzzleDataset, PuzzleDatasetConfig, PuzzleDatasetMetadata
 from utils.functions import load_model_class, get_model_source_path
 from models.sparse_embedding import CastedSparseEmbeddingSignSGD_Distributed
@@ -38,13 +35,11 @@ class LossConfig(pydantic.BaseModel):
     
     name: str
 
-
 class ArchConfig(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra='allow')
 
     name: str
     loss: LossConfig
-
 
 class PretrainConfig(pydantic.BaseModel):
     # Config
@@ -90,7 +85,6 @@ class TrainState:
     step: int
     total_steps: int
 
-
 def create_dataloader(config: PretrainConfig, split: str, rank: int, world_size: int, **kwargs):
     dataset = PuzzleDataset(PuzzleDatasetConfig(
         seed=config.seed,
@@ -113,7 +107,6 @@ def create_dataloader(config: PretrainConfig, split: str, rank: int, world_size:
         persistent_workers=True
     )
     return dataloader, dataset.metadata
-
 
 def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, world_size: int):
     model_cfg = dict(
@@ -336,8 +329,7 @@ def evaluate(config: PretrainConfig, train_state: TrainState, eval_loader: torch
                     count = metrics.pop("count")
                     reduced_metrics[set_name] = {k: v / count for k, v in metrics.items()}
 
-                # CUSTOM ACCURACY: user + semantic_location ONLY
-                # -----------------------------------------------------
+                # Custom Accuracy: user + intent
                 try:
                     import numpy as np
                     
@@ -496,6 +488,7 @@ def launch(hydra_config: DictConfig):
         metrics = evaluate(config, train_state, eval_loader, eval_metadata, rank=RANK, world_size=WORLD_SIZE)
 
         if RANK == 0 and metrics is not None:
+            metrics["epoch"] = _iter_id
             wandb.log(metrics, step=train_state.step)
             
         ############ Checkpointing

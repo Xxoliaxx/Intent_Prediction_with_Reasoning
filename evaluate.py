@@ -1,11 +1,9 @@
 from typing import List
 import yaml
 import os
-
 import torch
 import torch.distributed as dist
 import numpy as np
-
 import pydantic
 from omegaconf import OmegaConf
 from pretrain import PretrainConfig, init_train_state, evaluate, create_dataloader
@@ -60,9 +58,7 @@ def launch():
     train_state.model.eval()
     metrics = evaluate(config, train_state, eval_loader, eval_metadata, rank=RANK, world_size=WORLD_SIZE)
 
-    # -------------------------------------------
-    # CUSTOM METRIC: user + geohash accuracy only
-    # -------------------------------------------
+    # Custom Metric
     try:
         # Load saved evaluation outputs from checkpoint directory
         ckpt_dir = os.path.dirname(eval_cfg.checkpoint)
@@ -83,7 +79,7 @@ def launch():
 
         preds = logits.argmax(-1)
 
-        # ---- Feature selection ----
+        # Feature selection
         feature_cols = [
             "Intent",
             "semantic_location",
@@ -119,8 +115,6 @@ def launch():
     # Print metrics including new key
     if metrics is not None:
         print(metrics)
-
-
 
 if __name__ == "__main__":
     launch()

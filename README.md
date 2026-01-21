@@ -25,5 +25,5 @@ OMP_NUM_THREADS=8 python pretrain.py data_path=data/user-trajectory-hrm epochs=2
 
 ## Evaluation
 ```
-OMP_NUM_THREADS=8 CUDA_VISIBLE_DEVICES=0 torchrun --standalone --nproc-per-node 1 evaluate.py checkpoint="checkpoints/User-trajectory-hrm ACT-torch/HierarchicalReasoningModel_ACTV1 <checkpoint_name>/step_5200"
+OMP_NUM_THREADS=8 CUDA_VISIBLE_DEVICES=0 torchrun --standalone --nproc-per-node 1 evaluate.py checkpoint="checkpoints/User-trajectory-hrm ACT-torch/HierarchicalReasoningModel_ACTV1 <checkpoint_name>/step_<number>"
 ```

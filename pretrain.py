@@ -14,6 +14,7 @@ import coolname
 import hydra
 import pydantic
 from omegaconf import DictConfig
+import matplotlib.pyplot as plt
 # from adam_atan2 import AdamATan2
 
 try:
@@ -276,11 +277,29 @@ def evaluate(config: PretrainConfig, train_state: TrainState, eval_loader: torch
         metric_global_batch_size = [0 for _ in range(len(set_ids))]
         
         carry = None
+        if rank == 0:
+            extracted = False
+
         for set_name, batch, global_batch_size in eval_loader:
             # To device
             batch = {k: v.cuda() for k, v in batch.items()}
             with torch.device("cuda"):
                 carry = train_state.model.initial_carry(batch)  # type: ignore
+        
+            # ---- extract HRM hidden states ONCE (paper artifact) ----
+            if rank == 0 and not extracted:
+                loss_head = train_state.model          # ACTLossHead
+                hrm = loss_head.model                  # HierarchicalReasoningModel_ACTV1
+
+                states = hrm.extract_hidden_states(batch)
+
+                out_dir = os.path.join(config.checkpoint_path, "hidden_states")
+                os.makedirs(out_dir, exist_ok=True)
+
+                torch.save(states, os.path.join(out_dir, "hrm_hidden_states.pt"))
+
+                extracted = True
+
 
             # Forward
             while True:
@@ -328,55 +347,6 @@ def evaluate(config: PretrainConfig, train_state: TrainState, eval_loader: torch
                 for set_name, metrics in reduced_metrics.items():
                     count = metrics.pop("count")
                     reduced_metrics[set_name] = {k: v / count for k, v in metrics.items()}
-
-                # Custom Accuracy: user + intent
-                try:
-                    import numpy as np
-                    
-                    # loaded earlier as all_preds in evaluate()
-                    pred_tensor = all_preds.get("all__inputs")
-                    label_tensor = all_preds.get("all__labels")
-
-                    if pred_tensor is not None and label_tensor is not None:
-                        preds_cpu = pred_tensor.cpu().numpy()
-                        labels_cpu = label_tensor.cpu().numpy()
-
-                        # Feature order
-                        # ---- Feature selection ----
-                        feature_cols = [
-                            "Intent",
-                            "semantic_location",
-                            "hour",
-                            "is_weekend",
-                            "charging_status",
-                            "bluetooth_status",
-                            "user",
-                        ]
-
-                        F = len(feature_cols)
-                        K = eval_metadata.seq_len // F
-
-                        target_features = ["user", "Intent"]
-                        indices = []
-
-                        for f in target_features:
-                            fj = feature_cols.index(f)
-                            for step in range(K):
-                                indices.append(step * F + fj)
-
-                        indices = np.array(indices)
-
-                        pred_sub = preds_cpu[:, indices]
-                        label_sub = labels_cpu[:, indices]
-
-                        custom_acc = (pred_sub == label_sub).mean()
-
-                        # Attach new metric
-                        for set_name in reduced_metrics:
-                            reduced_metrics[set_name]["custom_accuracy"] = float(custom_acc)
-
-                except Exception as e:
-                    print("Custom accuracy failed:", e)
 
                 return reduced_metrics
 
@@ -482,13 +452,15 @@ def launch(hydra_config: DictConfig):
             if RANK == 0 and metrics is not None:
                 wandb.log(metrics, step=train_state.step)
                 progress_bar.update(train_state.step - progress_bar.n)  # type: ignore
+            # break
+
 
         ############ Evaluation
         train_state.model.eval()
         metrics = evaluate(config, train_state, eval_loader, eval_metadata, rank=RANK, world_size=WORLD_SIZE)
 
         if RANK == 0 and metrics is not None:
-            metrics["epoch"] = _iter_id
+            # metrics["epoch"] = _iter_id
             wandb.log(metrics, step=train_state.step)
             
         ############ Checkpointing
@@ -498,6 +470,7 @@ def launch(hydra_config: DictConfig):
     # finalize
     if dist.is_initialized():
         dist.destroy_process_group()
+        
     wandb.finish()
 
 

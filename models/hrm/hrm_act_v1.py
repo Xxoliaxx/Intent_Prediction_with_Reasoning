@@ -4,6 +4,7 @@ import math
 
 import torch
 import torch.nn.functional as F
+import torch._dynamo
 from torch import nn
 from pydantic import BaseModel
 
@@ -177,10 +178,20 @@ class HierarchicalReasoningModel_ACTV1_Inner(nn.Module):
         )
         
     def reset_carry(self, reset_flag: torch.Tensor, carry: HierarchicalReasoningModel_ACTV1InnerCarry):
+        # return HierarchicalReasoningModel_ACTV1InnerCarry(
+        #     z_H=torch.where(reset_flag.view(-1, 1, 1), self.H_init, carry.z_H),
+        #     z_L=torch.where(reset_flag.view(-1, 1, 1), self.L_init, carry.z_L),
+        # )
+
+        H_init = self.H_init.to(carry.z_H.device)
+        L_init = self.L_init.to(carry.z_L.device)
+
         return HierarchicalReasoningModel_ACTV1InnerCarry(
-            z_H=torch.where(reset_flag.view(-1, 1, 1), self.H_init, carry.z_H),
-            z_L=torch.where(reset_flag.view(-1, 1, 1), self.L_init, carry.z_L),
+            z_H=torch.where(reset_flag.view(-1, 1, 1), H_init, carry.z_H),
+            z_L=torch.where(reset_flag.view(-1, 1, 1), L_init, carry.z_L),
         )
+
+
 
     def forward(self, carry: HierarchicalReasoningModel_ACTV1InnerCarry, batch: Dict[str, torch.Tensor]) -> Tuple[HierarchicalReasoningModel_ACTV1InnerCarry, torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         seq_info = dict(
@@ -218,6 +229,12 @@ class HierarchicalReasoningModel_ACTV1_Inner(nn.Module):
         return new_carry, output, (q_logits[..., 0], q_logits[..., 1])
 
 
+# @torch._dynamo.disable
+# def _log_forward_residuals(model, delta_H, delta_L):
+#     model._forward_residual_H.append(delta_H.detach().cpu())
+#     model._forward_residual_L.append(delta_L.detach().cpu())
+
+
 class HierarchicalReasoningModel_ACTV1(nn.Module):
     """ACT wrapper."""
 
@@ -225,6 +242,14 @@ class HierarchicalReasoningModel_ACTV1(nn.Module):
         super().__init__()
         self.config = HierarchicalReasoningModel_ACTV1Config(**config_dict)
         self.inner = HierarchicalReasoningModel_ACTV1_Inner(self.config)
+        # # ---- ACT residual diagnostics ----
+        # self._forward_residual_H = []
+        # self._forward_residual_L = []
+
+        # # Reference states for residuals (z₀)
+        # self._zH0 = None
+        # self._zL0 = None
+
 
     @property
     def puzzle_emb(self):
@@ -239,9 +264,41 @@ class HierarchicalReasoningModel_ACTV1(nn.Module):
             steps=torch.zeros((batch_size, ), dtype=torch.int32),
             halted=torch.ones((batch_size, ), dtype=torch.bool),  # Default to halted
             
-            current_data={k: torch.empty_like(v) for k, v in batch.items()}
+            # current_data={k: torch.empty_like(v) for k, v in batch.items()}
+            current_data={k: torch.empty_like(v, device=v.device) for k, v in batch.items()}
+
         )
         
+    def extract_hidden_states(self, batch: Dict[str, torch.Tensor]):
+        """
+        Runs a full ACT rollout and returns all H/L states.
+        Single batch, no gradients.
+        """
+        self.eval()
+
+        with torch.no_grad():
+            carry = self.initial_carry(batch)
+
+            zH_steps = []
+            zL_steps = []
+
+            while True:
+                carry, outputs = self(carry=carry, batch=batch)
+
+                # store ONE example, full sequence
+                zH_steps.append(carry.inner_carry.z_H[0].detach().cpu())
+                zL_steps.append(carry.inner_carry.z_L[0].detach().cpu())
+
+                if carry.halted.all():
+                    break
+
+        return {
+            "z_H": torch.stack(zH_steps),  # [T, seq_len, hidden]
+            "z_L": torch.stack(zL_steps),
+            "steps": len(zH_steps),
+        }
+
+
     def forward(self, carry: HierarchicalReasoningModel_ACTV1Carry, batch: Dict[str, torch.Tensor]) -> Tuple[HierarchicalReasoningModel_ACTV1Carry, Dict[str, torch.Tensor]]:
         # Update data, carry (removing halted sequences)
         new_inner_carry = self.inner.reset_carry(carry.halted, carry.inner_carry)
@@ -250,15 +307,39 @@ class HierarchicalReasoningModel_ACTV1(nn.Module):
 
         new_current_data = {k: torch.where(carry.halted.view((-1, ) + (1, ) * (batch[k].ndim - 1)), batch[k], v) for k, v in carry.current_data.items()}
 
+        prev_z_H = carry.inner_carry.z_H
+        prev_z_L = carry.inner_carry.z_L
+
         # Forward inner model
         new_inner_carry, logits, (q_halt_logits, q_continue_logits) = self.inner(new_inner_carry, new_current_data)
+
+        # delta_H = (new_inner_carry.z_H - prev_z_H).norm(dim=-1).mean()
+        # delta_L = (new_inner_carry.z_L - prev_z_L).norm(dim=-1).mean()
+        # if not self.training:
+        #     _log_forward_residuals(self, delta_H, delta_L)
+
+        # # ---- initialize reference states (once per rollout) ----
+        # if self._zH0 is None:
+        #     self._zH0 = new_inner_carry.z_H.detach()
+        #     self._zL0 = new_inner_carry.z_L.detach()
+
+        # # ---- residuals from initial state (token 0, sample 0) ----
+        # delta_H = (new_inner_carry.z_H[0, 0] - self._zH0[0, 0]).norm()
+        # delta_L = (new_inner_carry.z_L[0, 0] - self._zL0[0, 0]).norm()
+
+        # if not self.training:
+        #     _log_forward_residuals(self, delta_H, delta_L)
+
 
         outputs = {
             "logits": logits,
             "q_halt_logits": q_halt_logits,
-            "q_continue_logits": q_continue_logits
+            "q_continue_logits": q_continue_logits,
         }
         
+        # outputs["forward_residual_H"] = delta_H.detach()
+        # outputs["forward_residual_L"] = delta_L.detach()
+
         with torch.no_grad():
             # Step
             new_steps = new_steps + 1

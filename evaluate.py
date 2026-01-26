@@ -58,60 +58,6 @@ def launch():
     train_state.model.eval()
     metrics = evaluate(config, train_state, eval_loader, eval_metadata, rank=RANK, world_size=WORLD_SIZE)
 
-    # Custom Metric
-    try:
-        # Load saved evaluation outputs from checkpoint directory
-        ckpt_dir = os.path.dirname(eval_cfg.checkpoint)
-        pred_file = None
-        for f in os.listdir(ckpt_dir):
-            if f.endswith("_all_preds.0"):
-                pred_file = os.path.join(ckpt_dir, f)
-                break
-
-        if pred_file is None:
-            raise RuntimeError("No prediction file found in checkpoint directory.")
-
-        saved = torch.load(pred_file, map_location="cpu")
-
-        logits = saved["logits"].to(torch.float32).cpu().numpy()
-        labels = saved["labels"].to(torch.int64).cpu().numpy()
-
-
-        preds = logits.argmax(-1)
-
-        # Feature selection
-        feature_cols = [
-            "Intent",
-            "semantic_location",
-            "hour",
-            "is_weekend",
-            "charging_status",
-            "bluetooth_status",
-            "user",
-        ]
-
-        F = len(feature_cols)
-        K = eval_metadata.seq_len // F
-
-        target_features = ["user", "Intent"]
-        indices = []
-
-        for f in target_features:
-            fj = feature_cols.index(f)
-            for step in range(K):
-                indices.append(step * F + fj)
-
-        indices = np.array(indices)
-
-        pred_sub = preds[:, indices]
-        label_sub = labels[:, indices]
-
-        custom_acc = (pred_sub == label_sub).mean()
-        metrics["custom_accuracy"] = float(custom_acc)
-
-    except Exception as e:
-        print("Failed computing custom accuracy:", e)
-
     # Print metrics including new key
     if metrics is not None:
         print(metrics)
